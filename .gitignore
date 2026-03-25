@@ -1,0 +1,54 @@
+# ====================================
+# SECRETOS Y CREDENCIALES — NUNCA SUBIR
+# ====================================
+.streamlit/secrets.toml
+.streamlit/secrets.*.toml
+.streamlit/*.json
+
+# ====================================
+# DATA SENSIBLE — NUNCA SUBIR
+# ====================================
+data/metas.json
+../../../01_Fuentes_Brutas/
+../../../02_Maestros/
+../../../03_Procesada/
+
+# ====================================
+# ARCHIVOS TEMPORALES PYTHON
+# ====================================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ====================================
+# ENTORNOS VIRTUALES
+# ====================================
+venv/
+env/
+.env
+.venv
+
+# ====================================
+# VS CODE
+# ====================================
+.vscode/
+*.code-workspace
+
+# ====================================
+# WINDOWS
+# ====================================
+Thumbs.db
+desktop.ini
+*.tmp
+
+# ====================================
+# LOGS
+# ====================================
+*.log
+logs/
