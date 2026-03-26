@@ -6,6 +6,7 @@ import re
 import json
 import requests
 import base64
+import plotly.graph_objects as go
 from datetime import datetime
 from pathlib import Path
 
@@ -22,6 +23,34 @@ from agents.kpi_engine import (
     calcular_volumen_por_cliente,
     calcular_participacion,
 )
+
+# =================================================================
+# CONFIGURACIÓN POWER BI
+# =================================================================
+
+POWER_BI_CONFIG_PATH = Path(__file__).parent / "data" / "power_bi_reports.json"
+
+
+def cargar_reportes_power_bi():
+    """Carga la lista de reportes desde el archivo JSON."""
+    if POWER_BI_CONFIG_PATH.exists():
+        with open(POWER_BI_CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f).get("reportes", [])
+    return []
+
+
+def agregar_reporte(titulo, descripcion, link):
+    """Agrega un nuevo reporte a la librería."""
+    config = {"reportes": []}
+    if POWER_BI_CONFIG_PATH.exists():
+        with open(POWER_BI_CONFIG_PATH, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    nuevo_id = "reporte_" + str(len(config["reportes"]) + 1)
+    config["reportes"].append({"id": nuevo_id, "titulo": titulo, "descripcion": descripcion, "link": link})
+    POWER_BI_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(POWER_BI_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+
 
 # =================================================================
 # CONFIGURACION DE PAGINA
@@ -52,35 +81,286 @@ LOGO_SQUARE_B64 = load_logo_b64("Logo_Parawa.png")
 # =================================================================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;900&display=swap');
 
 html, body, [class*="css"] {
     font-family: 'Nunito Sans', sans-serif !important;
 }
-#MainMenu, footer { visibility: hidden; }
+.stApp { background-color: #F4F6F8 !important; }
+#MainMenu, footer, header { visibility: hidden; }
 
-/* Botones primarios teal */
+/* Sidebar siempre visible — ocultar botón de colapso */
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapseButton"] button,
+button[aria-label="Collapse sidebar"],
+button[title="Collapse sidebar"] {
+    display: none !important;
+}
+.block-container { padding-top: 0.5rem !important; }
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    background: white !important;
+    border-radius: 8px !important;
+    padding: 6px !important;
+    border: 1px solid #E8ECF0 !important;
+    gap: 6px !important;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 6px !important;
+    font-weight: 900 !important;
+    font-size: 18px !important;
+    padding: 8px 18px !important;
+    color: #374151 !important;
+}
+.stTabs [aria-selected="true"] {
+    background: #00ACC1 !important;
+    color: white !important;
+    font-weight: 900 !important;
+    font-size: 18px !important;
+}
+
+/* Botones primarios */
 .stButton button[kind="primary"],
 [data-testid="stFormSubmitButton"] button {
-    background: #00BCD4 !important;
+    background: #00ACC1 !important;
     border: none !important;
     color: white !important;
     font-weight: 700 !important;
     border-radius: 8px !important;
+    box-shadow: 0 2px 6px rgba(0,172,193,0.3) !important;
 }
 .stButton button[kind="primary"]:hover,
 [data-testid="stFormSubmitButton"] button:hover {
     background: #0097A7 !important;
 }
 
-/* Tab activo teal */
-.stTabs [aria-selected="true"] {
-    background: #00BCD4 !important;
-    color: white !important;
-    border-radius: 6px !important;
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background: #FFFFFF !important;
+    border-right: 1px solid #E8ECF0 !important;
+}
+[data-testid="stSidebar"] * { color: #374151 !important; }
+[data-testid="stSidebar"] .stMarkdown h3 {
+    color: #1A1A2E !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    border-bottom: 2px solid #00ACC1 !important;
+    padding-bottom: 6px !important;
+}
+[data-testid="stSidebar"] .stMultiSelect > label,
+[data-testid="stSidebar"] .stRadio > label,
+[data-testid="stSidebar"] .stSelectbox > label {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+    color: #6B7280 !important;
+}
+
+/* Métricas nativas (usadas en proyección y regiones) */
+[data-testid="stMetricValue"] {
+    font-weight: 900 !important;
+    font-size: 1.8rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
+
+
+# =================================================================
+# HELPERS DE GRÁFICOS — Plotly estilo Parawa
+# =================================================================
+
+_PARAWA_COLORS = ["#00ACC1", "#F57C00", "#1A237E", "#26A69A"]
+
+
+def _plotly_linea(df_serie, x_col, y_cols, titulo, colores=None):
+    """Gráfico de línea estilo Parawa: marcadores circulares, valores encima, fondo blanco."""
+    if colores is None:
+        colores = _PARAWA_COLORS
+    fig = go.Figure()
+    for i, col in enumerate(y_cols):
+        color = colores[i % len(colores)]
+        y_vals = df_serie[col].tolist()
+        text_vals = [
+            "{:,.0f}".format(v) if v is not None and not pd.isna(v) else ""
+            for v in y_vals
+        ]
+        fig.add_trace(go.Scatter(
+            x=df_serie[x_col],
+            y=y_vals,
+            name=col,
+            mode="lines+markers+text",
+            line=dict(color=color, width=2.5),
+            marker=dict(size=7, color=color),
+            text=text_vals,
+            textposition="top center",
+            textfont=dict(size=18, family="Arial"),
+            connectgaps=False,
+        ))
+    fig.update_layout(
+        title=dict(text=titulo, font=dict(size=21, family="Arial", color="#212121"), x=0),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        margin=dict(l=20, r=20, t=55, b=20),
+        xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=18, color="#212121", family="Arial Black"), title=dict(font=dict(size=19, color="#212121", family="Arial Black"))),
+        yaxis=dict(showgrid=True, gridcolor="#F0F0F0", zeroline=False, tickfont=dict(size=18, color="#212121", family="Arial Black"), title=dict(font=dict(size=19, color="#212121", family="Arial Black"))),
+        font=dict(size=21, family="Arial"),
+    )
+    return fig
+
+
+def _plotly_barras_linea(df_serie, x_col, bar_col, line_col, titulo):
+    """Combo chart barras grises (fondo) + línea naranja con marcadores y valores."""
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=df_serie[x_col],
+        y=df_serie[bar_col],
+        name=bar_col,
+        marker_color="#E0E0E0",
+        opacity=0.85,
+    ))
+    line_vals = df_serie[line_col].tolist()
+    text_vals = [
+        "{:.1f}%".format(v) if v is not None and not pd.isna(v) else ""
+        for v in line_vals
+    ]
+    fig.add_trace(go.Scatter(
+        x=df_serie[x_col],
+        y=line_vals,
+        name=line_col,
+        mode="lines+markers+text",
+        line=dict(color="#F57C00", width=2.5),
+        marker=dict(size=7, color="#F57C00"),
+        text=text_vals,
+        textposition="top center",
+        textfont=dict(size=12, family="Arial"),
+        yaxis="y2",
+    ))
+    fig.update_layout(
+        title=dict(text=titulo, font=dict(size=14, family="Arial", color="#212121"), x=0),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        margin=dict(l=20, r=20, t=55, b=20),
+        xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(family="Arial")),
+        yaxis=dict(showgrid=True, gridcolor="#F0F0F0", zeroline=False, tickfont=dict(family="Arial")),
+        yaxis2=dict(overlaying="y", side="right", showgrid=False, zeroline=False),
+        font=dict(family="Arial"),
+    )
+    return fig
+
+
+# =================================================================
+# HELPERS VISUALES — Cards, títulos y header
+# =================================================================
+
+def render_section_title(titulo, subtitulo=""):
+    """Título de sección uppercase bold con subtítulo opcional."""
+    html = (
+        "<div style='margin:20px 0 12px 0;'>"
+        "<div style='font-size:13px;font-weight:900;color:#1A1A2E;"
+        "text-transform:uppercase;letter-spacing:0.05em;'>"
+        + titulo +
+        "</div>"
+    )
+    if subtitulo:
+        html += (
+            "<div style='font-size:11px;color:#8A94A6;margin-top:2px;'>"
+            + subtitulo +
+            "</div>"
+        )
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def _indicator_card_html(label, valor, color, emoji=""):
+    """Card de indicador general con borde izquierdo de color y emoji opcional."""
+    emoji_html = (
+        "<div style='font-size:22px;margin-bottom:6px;'>" + emoji + "</div>"
+        if emoji else ""
+    )
+    return (
+        "<div style='background:white;border-radius:12px;padding:18px 22px;"
+        "border-left:4px solid " + color + ";"
+        "box-shadow:0 1px 4px rgba(0,0,0,0.06);'>"
+        + emoji_html +
+        "<div style='font-size:14px;font-weight:700;color:#8A94A6;"
+        "text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;'>"
+        + label +
+        "</div>"
+        "<div style='font-size:38px;font-weight:900;color:" + color + ";line-height:1;'>"
+        + valor +
+        "</div>"
+        "</div>"
+    )
+
+
+def _kpi_card_html(label, valor, delta_str, inverse=False, emoji="", color="#00ACC1"):
+    """Card KPI estratégico — mismo estilo que Indicadores Generales con delta."""
+    emoji_html = (
+        "<div style='font-size:22px;margin-bottom:6px;'>" + emoji + "</div>"
+        if emoji else ""
+    )
+    delta_html = ""
+    if delta_str:
+        is_pos = delta_str.startswith("+")
+        if inverse:
+            is_pos = not is_pos
+        dc = "#43A047" if is_pos else "#E53935"
+        delta_html = (
+            "<div style='font-size:16px;font-weight:700;margin-top:6px;color:"
+            + dc + ";'>" + delta_str + "</div>"
+        )
+    return (
+        "<div style='background:white;border-radius:12px;padding:18px 22px;"
+        "border-left:4px solid " + color + ";"
+        "box-shadow:0 1px 4px rgba(0,0,0,0.06);'>"
+        + emoji_html +
+        "<div style='font-size:14px;font-weight:700;color:#8A94A6;"
+        "text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;'>"
+        + label +
+        "</div>"
+        "<div style='font-size:38px;font-weight:900;color:" + color + ";line-height:1;'>"
+        + valor +
+        "</div>"
+        + delta_html +
+        "</div>"
+    )
+
+
+def render_page_header(title, subtitle, username, region):
+    """Header corporativo: título, subtítulo y badges de usuario y región."""
+    user_badge = (
+        "<div style='background:#E0F7FA;color:#00838F;font-size:11px;"
+        "font-weight:700;padding:4px 12px;border-radius:20px;'>"
+        + username + "</div>"
+    )
+    region_badge = (
+        "<div style='background:#E8EAF6;color:#3949AB;font-size:11px;"
+        "font-weight:700;padding:4px 12px;border-radius:20px;'>"
+        + region + "</div>"
+    )
+
+    html = (
+        "<div style='background:white;border-bottom:1px solid #E8ECF0;"
+        "padding:14px 24px;display:flex;align-items:center;"
+        "justify-content:space-between;margin-bottom:16px;"
+        "box-shadow:0 1px 3px rgba(0,0,0,0.04);'>"
+        "<div>"
+        "<div style='font-size:32px;font-weight:900;color:#1A1A2E;"
+        "letter-spacing:-0.5px;line-height:1.1;'>" + title + "</div>"
+        "<div style='font-size:13px;color:#8A94A6;font-weight:600;"
+        "margin-top:4px;'>" + subtitle + "</div>"
+        "</div>"
+        "<div style='display:flex;gap:8px;align-items:center;'>"
+        + user_badge + region_badge +
+        "</div></div>"
+    )
+    st.markdown(html, unsafe_allow_html=True)
 
 
 # =================================================================
@@ -117,35 +397,40 @@ def check_login() -> bool:
     with col_c:
         st.markdown("<br><br>", unsafe_allow_html=True)
 
-        if LOGO_SQUARE_B64:
-            st.markdown(
-                "<div style='text-align:center;margin-bottom:1rem;'>"
-                "<div style='background:linear-gradient(135deg,#006064,#00ACC1);"
-                "width:90px;height:90px;border-radius:20px;"
-                "display:inline-flex;align-items:center;justify-content:center;"
-                "box-shadow:0 4px 16px rgba(0,131,143,0.3);padding:8px;'>"
-                "<img src='data:image/png;base64," + LOGO_SQUARE_B64 + "' height='70' />"
-                "</div></div>",
-                unsafe_allow_html=True
-            )
+        with st.container(border=False):
+            st.markdown("<br>", unsafe_allow_html=True)
 
-        st.markdown("### Centro de Comando")
-        st.caption("Plataforma de Inteligencia Comercial · Parawa")
-        st.divider()
+            if LOGO_SQUARE_B64:
+                st.markdown(
+                    "<div style='text-align:center;margin-bottom:1rem;'>"
+                    "<div style='background:linear-gradient(135deg,#006064,#00ACC1);"
+                    "width:90px;height:90px;border-radius:20px;"
+                    "display:inline-flex;align-items:center;justify-content:center;"
+                    "box-shadow:0 4px 16px rgba(0,131,143,0.3);padding:8px;'>"
+                    "<img src='data:image/png;base64," + LOGO_SQUARE_B64 + "' height='70' />"
+                    "</div></div>",
+                    unsafe_allow_html=True
+                )
 
-        with st.form("login_form"):
-            username  = st.text_input("Usuario", placeholder="Ingresa tu usuario")
-            password  = st.text_input("Contraseña", type="password", placeholder="Ingresa tu contraseña")
-            submitted = st.form_submit_button("Iniciar Sesión", use_container_width=True, type="primary")
+            st.markdown("### Centro de Comando")
+            st.caption("Plataforma de Inteligencia Comercial · Parawa")
+            st.divider()
 
-            if submitted:
-                passwords = st.secrets.get("passwords", {})
-                if username in passwords and passwords[username] == password:
-                    st.session_state["authenticated"] = True
-                    st.session_state["username"] = username
-                    st.rerun()
-                else:
-                    st.error("Usuario o contraseña incorrectos.")
+            with st.form("login_form"):
+                username  = st.text_input("**Usuario**", placeholder="Ingresa tu usuario")
+                password  = st.text_input("**Contraseña**", type="password", placeholder="Ingresa tu contraseña")
+                submitted = st.form_submit_button("Iniciar Sesión", use_container_width=True, type="primary")
+
+                if submitted:
+                    passwords = st.secrets.get("passwords", {})
+                    if username in passwords and passwords[username] == password:
+                        st.session_state["authenticated"] = True
+                        st.session_state["username"] = username
+                        st.rerun()
+                    else:
+                        st.error("Usuario o contraseña incorrectos.")
+
+            st.markdown("<br>", unsafe_allow_html=True)
 
         st.caption("© 2026 Parawa · Acceso restringido")
 
@@ -734,8 +1019,16 @@ def _render_kpis_estrategicos(df: pd.DataFrame):
 
     try:
         temporalidad = st.session_state.get("temporalidad", "Mensual")
-        st.subheader("📈 KPIs Estratégicos")
-        st.caption(f"Temporalidad: **{temporalidad}** · período actual vs anterior")
+        st.markdown(
+            "<h2 style='color:#1A1A2E;font-weight:900;font-size:20px;margin:20px 0 4px 0;'>"
+            "📈 KPIs Estratégicos</h2>",
+            unsafe_allow_html=True
+        )
+        st.markdown(
+            "<p style='color:#666;font-size:13px;font-weight:600;margin-bottom:12px;'>"
+            "Temporalidad: " + temporalidad + " · período actual vs anterior</p>",
+            unsafe_allow_html=True
+        )
 
         # ── Cache manual de KPIs ──
         _CV_KPI = "Total de Unidades Vendidas (und)"
@@ -765,65 +1058,89 @@ def _render_kpis_estrategicos(df: pd.DataFrame):
         c1, c2, c3, c4, c5 = st.columns(5)
 
         cob_p = kpi_cob.get("cobertura_ponderados", {})
-        c1.metric(
-            "🎯 Cobertura Ponderados",
-            f"{_val(cob_p)}%",
-            delta=_delta(cob_p, "{:+.1f}pp"),
-            help="Clientes ponderados activos / total ponderados histórico",
-        )
+        c1.markdown(_kpi_card_html(
+            "Cobertura Ponderados",
+            _val(cob_p) + "%",
+            _delta(cob_p, "{:+.1f}pp"),
+            emoji="🎯", color="#00ACC1",
+        ), unsafe_allow_html=True)
 
         cob_t = kpi_cob.get("cobertura_total", {})
-        c2.metric(
-            "👥 Cobertura Total",
-            f"{_val(cob_t)}%",
-            delta=_delta(cob_t, "{:+.1f}pp"),
-            help="Clientes únicos activos / total clientes histórico",
-        )
+        c2.markdown(_kpi_card_html(
+            "Cobertura Total",
+            _val(cob_t) + "%",
+            _delta(cob_t, "{:+.1f}pp"),
+            emoji="👥", color="#3949AB",
+        ), unsafe_allow_html=True)
 
-        c3.metric(
-            "📦 Vol. por Cliente",
+        c3.markdown(_kpi_card_html(
+            "Vol. por Cliente",
             _val(kpi_vol, "{:,.1f}"),
-            delta=_delta(kpi_vol),
-            help="Unidades totales / clientes activos por período",
-        )
+            _delta(kpi_vol),
+            emoji="📦", color="#00897B",
+        ), unsafe_allow_html=True)
 
         frec_val   = kpi_frec.get("actual")
         frec_delta = _delta(kpi_frec)
-        c4.metric(
-            "📅 Días entre Compras",
-            f"{frec_val:.1f}" if frec_val is not None else "—",
-            delta=frec_delta,
-            delta_color="inverse",
-            help="Promedio de días entre compras consecutivas por cliente",
-        )
+        c4.markdown(_kpi_card_html(
+            "Dias entre Compras",
+            "{:.1f}".format(frec_val) if frec_val is not None else "—",
+            frec_delta,
+            inverse=True,
+            emoji="📅", color="#F57C00",
+        ), unsafe_allow_html=True)
 
         frec_c_val   = kpi_frec_compra.get("actual")
         frec_c_delta = _delta(kpi_frec_compra)
-        c5.metric(
-            "🔄 Frecuencia de Compra",
-            f"{frec_c_val:.2f}" if frec_c_val is not None else "—",
-            delta=frec_c_delta,
-            help="Activaciones únicas / (clientes únicos × períodos únicos)",
-        )
+        c5.markdown(_kpi_card_html(
+            "Frecuencia de Compra",
+            "{:.2f}".format(frec_c_val) if frec_c_val is not None else "—",
+            frec_c_delta,
+            emoji="🔄", color="#8E24AA",
+        ), unsafe_allow_html=True)
 
         # --- Fila 2: Amplitud ---
         c1_2, _c2, _c3, _c4 = st.columns(4)
         amp_val = kpi_amp.get("actual")
-        c1_2.metric(
-            "🛒 Amplitud (SKUs/cliente)",
-            f"{amp_val:.2f}" if amp_val is not None else "—",
-            delta=_delta(kpi_amp),
-            help="Promedio de SKUs distintos por cliente activo por período",
-        )
+        c1_2.markdown(_kpi_card_html(
+            "Amplitud (SKUs/cliente)",
+            "{:.2f}".format(amp_val) if amp_val is not None else "—",
+            _delta(kpi_amp),
+            emoji="🛒", color="#E53935",
+        ), unsafe_allow_html=True)
 
         # --- Gráfico participación por Categoría ---
         cat_part = kpi_part.get("categoria", {})
         if cat_part:
-            st.markdown("**📊 Participación por Categoría**")
+            st.markdown(
+                "<h2 style='color:#1A1A2E;font-weight:900;font-size:20px;margin:20px 0 4px 0;'>"
+                "📊 Participación por Categoría</h2>",
+                unsafe_allow_html=True
+            )
             df_cat = pd.DataFrame(
                 list(cat_part.items()), columns=["Categoría", "% Participación"]
-            ).sort_values("% Participación", ascending=False)
-            st.bar_chart(df_cat.set_index("Categoría"), height=260)
+            ).sort_values("% Participación", ascending=True)
+            fig_cat = go.Figure(go.Bar(
+                x=df_cat["% Participación"],
+                y=df_cat["Categoría"],
+                orientation="h",
+                marker_color="#00ACC1",
+                text=["{:.1f}%".format(v) for v in df_cat["% Participación"]],
+                textposition="outside",
+                textfont=dict(size=17, family="Arial"),
+            ))
+            fig_cat.update_layout(
+                paper_bgcolor="#FFFFFF",
+                plot_bgcolor="#FFFFFF",
+                height=max(200, len(df_cat) * 38 + 60),
+                margin=dict(l=150, r=50, t=20, b=50),
+                font=dict(size=17),
+                title=dict(text=""),
+                showlegend=False,
+                xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=15, family="Arial Black", color="#8A94A6"), tickcolor="#8A94A6", title=dict(text="", font=dict(size=16, family="Arial Black"))),
+                yaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=16, family="Arial Black", color="#8A94A6"), tickcolor="#8A94A6", title=dict(text="")),
+            )
+            st.plotly_chart(fig_cat, use_container_width=True)
 
     except Exception as _e:
         st.error(f"⚠️ Error en KPIs Estratégicos: {type(_e).__name__}: {_e}")
@@ -906,14 +1223,37 @@ def _render_proyeccion_anual(df: pd.DataFrame):
         total_proyectado = total_real + sum(p for p in proyeccion if p is not None)
         avance_pct      = (total_real / total_proyectado * 100) if total_proyectado > 0 else 0.0
 
-        st.subheader(f"📈 Proyección de Ventas — {anio_actual}")
-        st.caption(f"Tendencia MoM aplicada: **{tendencia_mom:+.1f}%** (cap entre -10% y +20%)")
-        st.line_chart(df_graf, height=280)
+        st.markdown(
+            "<h2 style='color:#1A1A2E;font-weight:900;font-size:20px;margin:20px 0 4px 0;'>"
+            "📊 Proyección de Ventas — " + anio_actual + "</h2>",
+            unsafe_allow_html=True
+        )
+        st.markdown(
+            "<p style='color:#666;font-size:13px;font-weight:600;margin-bottom:12px;'>"
+            "Tendencia MoM aplicada: " + "{:+.1f}".format(tendencia_mom)
+            + "% (rango entre -10% y +20%)</p>",
+            unsafe_allow_html=True
+        )
+        df_graf_plot = df_graf.reset_index()
+        fig_proy = _plotly_linea(
+            df_graf_plot, "Mes",
+            ["Ventas Reales", "Proyección"],
+            "Ventas Reales vs Proyección — " + anio_actual,
+            colores=["#00ACC1", "#F57C00"],
+        )
+        fig_proy.update_layout(
+            height=300,
+            font=dict(size=17, family="Arial"),
+            title=dict(text=""),
+            xaxis=dict(showgrid=False, zeroline=False, tickfont=dict(size=15, color="#8A94A6", family="Arial Black"), tickcolor="#8A94A6", title=dict(font=dict(size=16, family="Arial Black"))),
+            yaxis=dict(showticklabels=False, showgrid=True, gridcolor="#E8ECF0", zeroline=False, title=None),
+        )
+        st.plotly_chart(fig_proy, use_container_width=True)
 
         mc1, mc2, mc3 = st.columns(3)
-        mc1.metric("✅ Acumulado real", f"{total_real:,.0f} und")
-        mc2.metric("🎯 Proyección año completo", f"{total_proyectado:,.0f} und")
-        mc3.metric("📊 Avance vs proyección", f"{avance_pct:.1f}%")
+        mc1.markdown(_indicator_card_html("Acumulado Real", "{:,.0f} und".format(int(total_real)), "#00ACC1", "✅"), unsafe_allow_html=True)
+        mc2.markdown(_indicator_card_html("Proyección Año Completo", "{:,.0f} und".format(int(total_proyectado)), "#3949AB", "🎯"), unsafe_allow_html=True)
+        mc3.markdown(_indicator_card_html("Avance vs Proyección", "{:.1f}%".format(avance_pct), "#00897B", "📊"), unsafe_allow_html=True)
 
     except Exception as _e:
         st.caption(f"⚠️ No se pudo calcular la proyección anual: {_e}")
@@ -926,15 +1266,26 @@ def _render_proyeccion_anual(df: pd.DataFrame):
 def render_dashboard(df: pd.DataFrame, df_user: pd.DataFrame = None, username: str = ""):
     CV = "Total de Unidades Vendidas (und)"
 
-    st.subheader("📊 Indicadores Generales")
+    st.markdown(
+        "<h2 style='color:#1A1A2E;font-weight:900;font-size:20px;margin:20px 0 4px 0;'>"
+        "📊 Indicadores Generales</h2>",
+        unsafe_allow_html=True
+    )
     c1, c2, c3, c4 = st.columns(4)
     _df_activos = df[df[CV] > 0]
     _clientes_activos = _df_activos["Descripción Cliente"].nunique()
 
-    c1.metric("📦 Unidades Totales",   f"{df[CV].sum():,.0f}")
-    c2.metric("👤 Clientes",            f"{_clientes_activos:,}")
-    c3.metric("🏢 Distribuidores",     f"{df['Distribuidor'].nunique()}")
-    c4.metric("🛒 Productos",          f"{df['Descripción SKU Parawa'].nunique() if 'Descripción SKU Parawa' in df.columns else '—'}")
+    _v_und  = "{:,.0f}".format(df[CV].sum())
+    _v_cli  = "{:,}".format(_clientes_activos)
+    _v_dist = str(df['Distribuidor'].nunique())
+    _v_prod = (
+        str(df['Descripción SKU Parawa'].nunique())
+        if 'Descripción SKU Parawa' in df.columns else "—"
+    )
+    c1.markdown(_indicator_card_html("Unidades Totales", _v_und,  "#00ACC1", "📦"), unsafe_allow_html=True)
+    c2.markdown(_indicator_card_html("Clientes",         _v_cli,  "#3949AB", "👥"), unsafe_allow_html=True)
+    c3.markdown(_indicator_card_html("Distribuidores",   _v_dist, "#00897B", "🏢"), unsafe_allow_html=True)
+    c4.markdown(_indicator_card_html("Productos",        _v_prod, "#F57C00", "🛒"), unsafe_allow_html=True)
 
     fuente = st.session_state.get("fuente_segmento","Distribuidor (todos)")
     if fuente == "Parawa (ponderados)":
@@ -945,15 +1296,18 @@ def render_dashboard(df: pd.DataFrame, df_user: pd.DataFrame = None, username: s
         cobertura = (pv/tv*100) if tv>0 else 0
         st.caption(f"ℹ️ Vista completa — ponderados representan el **{cobertura:.1f}%** del volumen.")
 
-    st.divider()
     _render_kpis_estrategicos(df)
-
-    st.divider()
     _render_proyeccion_anual(df)
-
-    st.divider()
-    st.subheader("🤖 Agente: Analista de Ventas")
-    st.caption("Pandas calcula las métricas · Gemini las interpreta")
+    st.markdown(
+        "<h2 style='color:#1A1A2E;font-weight:900;font-size:20px;margin:20px 0 4px 0;'>"
+        "🤖 Agente: Analista de Ventas</h2>",
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        "<p style='color:#666;font-size:13px;font-weight:600;margin-bottom:12px;'>"
+        "Pandas calcula las métricas · Gemini las interpreta</p>",
+        unsafe_allow_html=True
+    )
 
     col_btn, col_mode = st.columns([1,2])
     with col_btn:
@@ -1046,7 +1400,9 @@ def _render_metrics_tab_from_dict(m: dict):
     if tendencia.get("disponible") and tendencia.get("tendencia"):
         st.subheader("📈 Tendencia Mensual")
         df_t = pd.DataFrame(tendencia["tendencia"])
-        st.line_chart(df_t.set_index("periodo")["unidades"])
+        fig_tend = _plotly_linea(df_t, "periodo", ["unidades"], "Unidades por Período")
+        fig_tend.update_layout(height=280)
+        st.plotly_chart(fig_tend, use_container_width=True)
         df_t_display = df_t.copy()
         df_t_display["unidades"] = df_t_display["unidades"].apply(lambda x: f"{x:,.0f}")
         if "mom_pct" in df_t_display.columns:
@@ -1200,7 +1556,12 @@ def _render_regional_tab(regional_result: dict, df_user: pd.DataFrame = None, us
     if t.get("disponible") and t.get("tendencia"):
         st.subheader(f"📈 Tendencia Regional ({t.get('direccion', '')})")
         df_t = pd.DataFrame(t["tendencia"])
-        st.line_chart(df_t.set_index("periodo")["unidades"])
+        fig_reg = _plotly_linea(
+            df_t, "periodo", ["unidades"],
+            "Tendencia Regional — " + t.get("direccion", ""),
+        )
+        fig_reg.update_layout(height=280)
+        st.plotly_chart(fig_reg, use_container_width=True)
         df_t_disp = df_t.copy()
         df_t_disp["unidades"] = df_t_disp["unidades"].apply(lambda x: f"{x:,.0f}")
         if "mom_pct" in df_t_disp.columns:
@@ -2311,12 +2672,7 @@ def main():
     username = st.session_state["username"]
     region   = get_user_region(username)
 
-    # Sidebar — logo + info + cerrar sesión
-    if LOGO_SQUARE_B64:
-        st.sidebar.image(
-            f"data:image/png;base64,{LOGO_SQUARE_B64}",
-            width=80
-        )
+    # Sidebar — info + cerrar sesión
     st.sidebar.markdown(f"**{username}** · {region}")
     if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
         st.session_state.clear()
@@ -2373,13 +2729,16 @@ def main():
         st.warning("No hay datos con los filtros seleccionados.")
         return
 
-    # Header simple nativo
-    st.title("🎯 Centro de Comando")
-    st.caption(f"**{username}** · {region} · {len(df_filtered):,} registros · {df_filtered['Distribuidor'].nunique()} distribuidor(es) · {datetime.now().strftime('%d/%m/%Y')}")
-    st.divider()
+    # Header corporativo Parawa
+    _subtitle = (
+        str(len(df_filtered)) + " registros · "
+        + str(df_filtered['Distribuidor'].nunique()) + " distribuidor(es) · "
+        + datetime.now().strftime('%d/%m/%Y')
+    )
+    render_page_header("Centro de Comando", _subtitle, username, region)
 
-    tab_dashboard, tab_chat, tab_data, tab_metas = st.tabs(
-        ["📊 Dashboard + Agente","💬 Chat Inteligente","📁 Explorar Datos","🎯 Metas"]
+    tab_dashboard, tab_chat, tab_data, tab_metas, tab_powerbi = st.tabs(
+        ["📊 Dashboard + Agente","💬 Chat Inteligente","📁 Explorar Datos","🎯 Metas","📈 Power BI"]
     )
 
     with tab_dashboard:
@@ -2400,6 +2759,78 @@ def main():
 
     with tab_metas:
         render_metas_tab(df_user, df_all, username)
+
+    with tab_powerbi:
+        render_power_bi_tab()
+
+
+def render_power_bi_tab():
+    """Pestaña con librería de reportes Power BI desde JSON."""
+    st.markdown(
+        "<h2 style='color:#1A1A2E;font-weight:900;font-size:20px;margin:20px 0 4px 0;'>"
+        "📊 Librería de Reportes Power BI</h2>",
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        "<div style='background:#FFF8E1;border-left:4px solid #F57C00;border-radius:8px;"
+        "padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;'>"
+        "<span style='font-size:20px;'>🔒</span>"
+        "<span style='font-size:13px;font-weight:700;color:#374151;'>"
+        "Los filtros del sidebar <strong>no aplican</strong> en esta vista. "
+        "Usa los filtros dentro del reporte de Power BI directamente."
+        "</span></div>",
+        unsafe_allow_html=True
+    )
+
+    reportes = cargar_reportes_power_bi()
+
+    if not reportes:
+        st.warning("⚠️ No hay reportes configurados. Agrega uno abajo.")
+    else:
+        titulos = [r["titulo"] for r in reportes]
+        idx = st.selectbox(
+            "**Selecciona un Reporte:**",
+            options=range(len(reportes)),
+            format_func=lambda i: titulos[i],
+            key="powerbi_selector",
+        )
+        reporte = reportes[idx]
+        st.markdown(
+            "<p style='color:#666;font-size:13px;font-weight:600;margin-bottom:12px;'>"
+            + reporte["descripcion"] + "</p>",
+            unsafe_allow_html=True
+        )
+        link = reporte.get("link", "")
+        if link and link.startswith("http"):
+            st.markdown(
+                "<div style='position:relative;width:100%;height:900px;overflow:hidden;'>"
+                "<iframe width='100%' height='924px' src='"
+                + link
+                + "' frameborder='0' allowFullScreen='true'"
+                " style='position:absolute;top:0;left:0;border:none;'></iframe>"
+                "<div style='position:absolute;bottom:0;left:0;width:100%;height:28px;"
+                "background:#F4F6F8;z-index:10;'></div>"
+                "</div>",
+                unsafe_allow_html=True
+            )
+        else:
+            st.info("💡 Este reporte aún no tiene link configurado. Edita el archivo `data/power_bi_reports.json`.")
+
+    with st.expander("➕ Agregar Nuevo Reporte"):
+        col1, col2 = st.columns(2)
+        with col1:
+            nuevo_titulo = st.text_input("Título del Reporte", placeholder="ej: Ventas Nacional", key="pbi_titulo")
+        with col2:
+            nuevo_desc = st.text_input("Descripción", placeholder="ej: Dashboard de ventas nacionales", key="pbi_desc")
+        nuevo_link = st.text_input("Link Power BI", placeholder="https://app.powerbi.com/view?r=...", key="pbi_link")
+        if st.button("💾 Agregar Reporte", use_container_width=True):
+            if nuevo_titulo and nuevo_link and nuevo_link.startswith("http"):
+                agregar_reporte(nuevo_titulo, nuevo_desc, nuevo_link)
+                st.success("✅ Reporte agregado correctamente")
+                st.rerun()
+            else:
+                st.error("❌ Completa título y un link HTTP válido")
 
 
 if __name__ == "__main__":

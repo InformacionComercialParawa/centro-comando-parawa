@@ -1,0 +1,10 @@
+{
+  "reportes": [
+    {
+      "id": "ventas_region",
+      "titulo": "📊 Resumen de Sell Out",
+      "descripcion": "Dashboard de ventas agregadas por región y distribuidor",
+      "link": "https://app.powerbi.com/view?r=eyJrIjoiZWEyZDdhZGItYTA5OC00NGVlLTg5ODMtNGNkMjZlYThkODJjIiwidCI6IjJmMzFhNmU4LWU1NGUtNDExNy1iNjFkLWQzNjVkZWQ5YjQ0OCJ9"
+    }
+  ]
+}
