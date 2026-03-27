@@ -661,6 +661,13 @@ def load_consolidated():
 
     # ── Modo Demo ────────────────────────────────────────────────────────────
     if modo == "demo":
+        # Intentar primero por file ID (Streamlit Cloud)
+        demo_id = st.secrets.get("data", {}).get("google_drive", {}).get("sellout_demo_consolidado_id", "")
+        if demo_id:
+            df = load_from_google_drive(demo_id)
+            if df is not None:
+                return df, "⚠️ MODO DEMO — Data de ejemplo ficticia"
+        # Fallback: disco local (entorno local)
         procesada_folder = st.secrets.get("data", {}).get("procesada_folder", "")
         ruta = Path(procesada_folder) / "sellout_demo_consolidado.parquet"
         if not ruta.exists():
