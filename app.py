@@ -593,8 +593,10 @@ def load_maestro_skus(maestros_folder: str) -> pd.DataFrame:
 
 def build_drive_service():
     """
-    Busca el JSON de cuenta de servicio en .streamlit/*.json.
-    Retorna el servicio de Drive v3, o None si no hay credenciales o librería.
+    Construye el servicio Drive v3.
+    Intenta primero el JSON local (.streamlit/*.json),
+    luego lee credenciales desde st.secrets["gcp_service_account"] (Streamlit Cloud).
+    Retorna el servicio o None si no hay credenciales o librería.
     """
     try:
         from google.oauth2 import service_account
@@ -602,15 +604,25 @@ def build_drive_service():
     except ImportError:
         return None
 
+    SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+
+    # ── Opción 1: JSON local (entorno local) ─────────────────────────────────
     streamlit_dir = Path(__file__).parent / ".streamlit"
     json_files = list(streamlit_dir.glob("*.json"))
-    if not json_files:
-        return None
+    if json_files:
+        try:
+            creds = service_account.Credentials.from_service_account_file(
+                str(json_files[0]), scopes=SCOPES
+            )
+            return _gdrive_build("drive", "v3", credentials=creds, cache_discovery=False)
+        except Exception:
+            pass
 
+    # ── Opción 2: secrets.toml (Streamlit Cloud) ──────────────────────────────
     try:
-        creds = service_account.Credentials.from_service_account_file(
-            str(json_files[0]),
-            scopes=["https://www.googleapis.com/auth/drive.readonly"],
+        sa_info = dict(st.secrets["gcp_service_account"])
+        creds = service_account.Credentials.from_service_account_info(
+            sa_info, scopes=SCOPES
         )
         return _gdrive_build("drive", "v3", credentials=creds, cache_discovery=False)
     except Exception:
