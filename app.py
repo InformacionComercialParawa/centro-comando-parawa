@@ -423,7 +423,17 @@ def check_login() -> bool:
 
                 if submitted:
                     passwords = st.secrets.get("passwords", {})
-                    if username in passwords and passwords[username] == password:
+                    stored = passwords.get(username, "")
+                    # Soporta hashes bcrypt ($2b$...) y texto plano (legacy)
+                    try:
+                        import bcrypt as _bcrypt
+                        if stored.startswith("$2"):
+                            valid = _bcrypt.checkpw(password.encode(), stored.encode())
+                        else:
+                            valid = stored == password
+                    except ImportError:
+                        valid = stored == password
+                    if username in passwords and valid:
                         st.session_state["authenticated"] = True
                         st.session_state["username"] = username
                         st.rerun()
