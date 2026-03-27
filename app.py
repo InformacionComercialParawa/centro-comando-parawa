@@ -74,7 +74,7 @@ def load_logo_b64(filename: str) -> str:
             return base64.b64encode(f.read()).decode()
     return ""
 
-LOGO_SQUARE_B64 = load_logo_b64("Logo_Parawa.png")
+LOGO_SQUARE_B64 = load_logo_b64("Logo_Parawa_transparent.png")
 
 # =================================================================
 # CSS MINIMO — solo lo esencial
