@@ -400,7 +400,7 @@ def check_login() -> bool:
         with st.container(border=False):
             st.markdown("<br>", unsafe_allow_html=True)
 
-            logo_img = ("<img src='data:image/png;base64," + LOGO_SQUARE_B64 + "' width='80' style='margin-bottom:20px;filter:drop-shadow(0 4px 8px rgba(0,172,193,0.15));'>") if LOGO_SQUARE_B64 else ""
+            logo_img = ("<img src='data:image/png;base64," + LOGO_SQUARE_B64 + "' width='160' style='margin-bottom:20px;filter:drop-shadow(0 4px 8px rgba(0,172,193,0.15));'>") if LOGO_SQUARE_B64 else ""
             st.markdown(
                 "<div style='"
                 "text-align:center;"
