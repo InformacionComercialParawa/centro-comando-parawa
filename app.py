@@ -403,12 +403,8 @@ def check_login() -> bool:
             if LOGO_SQUARE_B64:
                 st.markdown(
                     "<div style='text-align:center;margin-bottom:1rem;'>"
-                    "<div style='background:linear-gradient(135deg,#006064,#00ACC1);"
-                    "width:90px;height:90px;border-radius:20px;"
-                    "display:inline-flex;align-items:center;justify-content:center;"
-                    "box-shadow:0 4px 16px rgba(0,131,143,0.3);padding:8px;'>"
-                    "<img src='data:image/png;base64," + LOGO_SQUARE_B64 + "' height='70' />"
-                    "</div></div>",
+                    "<img src='data:image/png;base64," + LOGO_SQUARE_B64 + "' height='117' />"
+                    "</div>",
                     unsafe_allow_html=True
                 )
 
