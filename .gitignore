@@ -14,6 +14,12 @@ data/metas.json
 ../../../03_Procesada/
 
 # ====================================
+# ARCHIVOS DE DATOS — NUNCA SUBIR
+# ====================================
+*.parquet
+*.xlsx
+
+# ====================================
 # ARCHIVOS TEMPORALES PYTHON
 # ====================================
 __pycache__/

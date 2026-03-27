@@ -617,18 +617,51 @@ def build_drive_service():
         return None
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def load_consolidated(procesada_folder: str):
+def load_from_google_drive(file_id):
     """
-    Lee el Parquet consolidado. Intenta Google Drive primero;
-    fallback a disco local si Drive no está disponible o falla.
-    Retorna (df, fuente) donde fuente es un string de caption o None.
-    En modo demo lee sellout_demo_consolidado.parquet y retorna marca especial.
+    Descarga un archivo Parquet desde Google Drive usando Service Account.
+    Usa el JSON de credenciales en .streamlit/*.json (local) o secrets.toml (cloud).
+    """
+    import io
+    try:
+        from googleapiclient.http import MediaIoBaseDownload
+    except ImportError:
+        st.error("Falta google-api-python-client en requirements.txt")
+        return None
+
+    service = build_drive_service()
+    if service is None:
+        st.error("No se pudo autenticar con Google Drive.")
+        return None
+
+    try:
+        request = service.files().get_media(
+            fileId=file_id, supportsAllDrives=True
+        )
+        buffer = io.BytesIO()
+        downloader = MediaIoBaseDownload(buffer, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+        buffer.seek(0)
+        return pd.read_parquet(buffer)
+    except Exception as e:
+        st.error("Error leyendo desde Google Drive: " + str(e))
+        return None
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_consolidated():
+    """
+    Carga el Parquet consolidado desde Google Drive (por file ID).
+    En modo demo lee sellout_demo_consolidado.parquet desde disco local.
+    Retorna (df, fuente) donde fuente es un string de aviso o None.
     """
     modo = st.secrets.get("app", {}).get("modo", "produccion")
 
     # ── Modo Demo ────────────────────────────────────────────────────────────
     if modo == "demo":
+        procesada_folder = st.secrets.get("data", {}).get("procesada_folder", "")
         ruta = Path(procesada_folder) / "sellout_demo_consolidado.parquet"
         if not ruta.exists():
             return pd.DataFrame(), None
@@ -637,28 +670,25 @@ def load_consolidated(procesada_folder: str):
         except Exception:
             return pd.DataFrame(), None
 
-    # ── Intento 1: Google Drive ──────────────────────────────────────────────
-    try:
-        service = build_drive_service()
-        if service is not None:
-            folder_id = st.secrets.get("drive", {}).get("folder_id", "")
-            if folder_id:
-                from agents.drive_loader import load_parquet_from_drive
-                df = load_parquet_from_drive(
-                    service, "sellout_consolidado.parquet", folder_id
-                )
-                return df, "📡 Datos cargados desde Google Drive"
-    except Exception:
-        pass  # sin credenciales o Drive inaccesible → fallback local
+    # ── Producción: Google Drive por file ID ─────────────────────────────────
+    file_id = st.secrets.get("data", {}).get("google_drive", {}).get("sellout_consolidado_id", "")
 
-    # ── Fallback: disco local ────────────────────────────────────────────────
-    ruta = Path(procesada_folder) / "sellout_consolidado.parquet"
-    if not ruta.exists():
+    if not file_id:
+        # Fallback: disco local si no hay file_id configurado
+        procesada_folder = st.secrets.get("data", {}).get("procesada_folder", "")
+        ruta = Path(procesada_folder) / "sellout_consolidado.parquet"
+        if not ruta.exists():
+            return pd.DataFrame(), None
+        try:
+            return pd.read_parquet(ruta), "💾 Datos cargados desde disco local"
+        except Exception:
+            return pd.DataFrame(), None
+
+    df = load_from_google_drive(file_id)
+    if df is None:
         return pd.DataFrame(), None
-    try:
-        return pd.read_parquet(ruta), "💾 Datos cargados desde disco local"
-    except Exception:
-        return pd.DataFrame(), None
+
+    return df, "📡 Datos cargados desde Google Drive"
 
 
 # =================================================================
@@ -2679,14 +2709,8 @@ def main():
         st.rerun()
     st.sidebar.divider()
 
-    try:
-        procesada_folder = st.secrets["data"]["procesada_folder"]
-    except (KeyError, FileNotFoundError):
-        st.error("Verifica secrets.toml: falta [data] procesada_folder.")
-        return
-
     with st.spinner("Cargando datos consolidados..."):
-        df_all, _data_source = load_consolidated(procesada_folder)
+        df_all, _data_source = load_consolidated()
 
     if _data_source:
         if _data_source.startswith("⚠️"):
