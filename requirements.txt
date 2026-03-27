@@ -3,3 +3,7 @@ pandas
 pyarrow
 requests
 plotly
+google-auth
+google-api-python-client
+openpyxl
+rapidfuzz
