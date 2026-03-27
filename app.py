@@ -400,17 +400,26 @@ def check_login() -> bool:
         with st.container(border=False):
             st.markdown("<br>", unsafe_allow_html=True)
 
-            if LOGO_SQUARE_B64:
-                st.markdown(
-                    "<div style='text-align:center;margin-bottom:1rem;'>"
-                    "<img src='data:image/png;base64," + LOGO_SQUARE_B64 + "' height='117' />"
-                    "</div>",
-                    unsafe_allow_html=True
-                )
-
-            st.markdown("### Centro de Comando")
-            st.caption("Plataforma de Inteligencia Comercial · Parawa")
-            st.divider()
+            logo_img = ("<img src='data:image/png;base64," + LOGO_SQUARE_B64 + "' width='80' style='margin-bottom:20px;filter:drop-shadow(0 4px 8px rgba(0,172,193,0.15));'>") if LOGO_SQUARE_B64 else ""
+            st.markdown(
+                "<div style='"
+                "text-align:center;"
+                "margin-bottom:50px;"
+                "padding:30px;"
+                "border-bottom:3px solid #00ACC1;"
+                "background:linear-gradient(180deg,rgba(0,172,193,0.05) 0%,transparent 100%);"
+                "border-radius:12px;"
+                "'>"
+                + logo_img +
+                "<h1 style='color:#1A1A2E;font-size:40px;font-weight:900;margin:0 0 8px 0;letter-spacing:-0.5px;'>"
+                "Centro de Comando"
+                "</h1>"
+                "<p style='color:#8A94A6;font-size:13px;font-weight:600;margin:0;letter-spacing:1.2px;'>"
+                "INTELIGENCIA COMERCIAL PARAWA"
+                "</p>"
+                "</div>",
+                unsafe_allow_html=True
+            )
 
             with st.form("login_form"):
                 username  = st.text_input("**Usuario**", placeholder="Ingresa tu usuario")
