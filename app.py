@@ -63,13 +63,35 @@ st.set_page_config(
 )
 
 # ============================================================================
-# BOTÓN FLOTANTE HAMBURGUESA PARA MOBILE
+# PWA - PROGRESSIVE WEB APP
 # ============================================================================
 
 st.markdown("""
-    <style>
-    /* Botón flotante para abrir sidebar en mobile */
-    @media (max-width: 768px) {
+    <meta name="theme-color" content="#00ACC1">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Centro Comando">
+    <link rel="manifest" href="assets/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%2300ACC1' width='192' height='192'/><text x='96' y='110' font-size='90' fill='white' text-anchor='middle' font-weight='bold'>CC</text></svg>">
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('assets/sw.js')
+                .then(r => console.log('✅ SW registrado'))
+                .catch(e => console.log('⚠️ SW error:', e));
+        }
+
+        // Detectar si es PWA
+        window.isPWA = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+        console.log('🔍 ¿Es PWA?', window.isPWA);
+    </script>
+""", unsafe_allow_html=True)
+
+# Mostrar botón hamburguesa SOLO si es PWA
+if st.session_state.get('isPWA', False):
+    st.markdown("""
+        <style>
         .hamburger-btn {
             position: fixed;
             top: 20px;
@@ -84,46 +106,15 @@ st.markdown("""
             font-size: 22px;
             font-weight: 900;
             box-shadow: 0 4px 12px rgba(0, 172, 193, 0.4);
-            transition: all 0.3s ease;
-            font-family: Arial, sans-serif;
         }
-
         .hamburger-btn:hover {
             background: #00838F;
-            box-shadow: 0 6px 16px rgba(0, 172, 193, 0.5);
             transform: scale(1.05);
         }
-
-        .hamburger-btn:active {
-            transform: scale(0.95);
-        }
-
-        /* Ocultar botón colapso nativo de Streamlit */
-        [data-testid="stSidebarCollapseButton"],
-        [data-testid="stSidebarCollapseButton"] button,
-        button[aria-label="Collapse sidebar"],
-        button[title="Collapse sidebar"] {
-            display: none !important;
-        }
-
-        /* Sidebar siempre visible en mobile después de clickear */
-        [data-testid="stSidebar"] {
-            transition: transform 0.3s ease;
-        }
-    }
-
-    /* En desktop: mantener sidebar normal */
-    @media (min-width: 769px) {
-        .hamburger-btn {
-            display: none !important;
-        }
-    }
-    </style>
-
-    <button class="hamburger-btn" onclick="document.querySelector('[data-testid=stSidebar]').scrollIntoView({behavior: 'smooth'});">
-        ≡
-    </button>
-""", unsafe_allow_html=True)
+        [data-testid="stSidebarCollapseButton"] { display: none !important; }
+        </style>
+        <button class="hamburger-btn" onclick="document.querySelector('[data-testid=stSidebar]').scrollIntoView({behavior: 'smooth'});">≡</button>
+    """, unsafe_allow_html=True)
 
 # =================================================================
 # CARGA DE LOGO
@@ -2791,6 +2782,9 @@ def _render_metas_asesor(df_user: pd.DataFrame, access: dict, username: str):
 # =================================================================
 # MAIN
 # =================================================================
+
+if 'isPWA' not in st.session_state:
+    st.session_state.isPWA = False
 
 def main():
     if not check_login():
