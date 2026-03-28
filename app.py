@@ -62,6 +62,69 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ============================================================================
+# BOTÓN FLOTANTE HAMBURGUESA PARA MOBILE
+# ============================================================================
+
+st.markdown("""
+    <style>
+    /* Botón flotante para abrir sidebar en mobile */
+    @media (max-width: 768px) {
+        .hamburger-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 999;
+            background: #00ACC1;
+            color: white;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 22px;
+            font-weight: 900;
+            box-shadow: 0 4px 12px rgba(0, 172, 193, 0.4);
+            transition: all 0.3s ease;
+            font-family: Arial, sans-serif;
+        }
+
+        .hamburger-btn:hover {
+            background: #00838F;
+            box-shadow: 0 6px 16px rgba(0, 172, 193, 0.5);
+            transform: scale(1.05);
+        }
+
+        .hamburger-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Ocultar botón colapso nativo de Streamlit */
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="stSidebarCollapseButton"] button,
+        button[aria-label="Collapse sidebar"],
+        button[title="Collapse sidebar"] {
+            display: none !important;
+        }
+
+        /* Sidebar siempre visible en mobile después de clickear */
+        [data-testid="stSidebar"] {
+            transition: transform 0.3s ease;
+        }
+    }
+
+    /* En desktop: mantener sidebar normal */
+    @media (min-width: 769px) {
+        .hamburger-btn {
+            display: none !important;
+        }
+    }
+    </style>
+
+    <button class="hamburger-btn" onclick="document.querySelector('[data-testid=stSidebar]').scrollIntoView({behavior: 'smooth'});">
+        ≡
+    </button>
+""", unsafe_allow_html=True)
+
 # =================================================================
 # CARGA DE LOGO
 # =================================================================
