@@ -63,7 +63,7 @@ st.set_page_config(
 )
 
 # ============================================================================
-# PWA - PROGRESSIVE WEB APP
+# PWA - PROGRESSIVE WEB APP CON BOTÓN MANUAL DE INSTALACIÓN
 # ============================================================================
 
 st.markdown("""
@@ -72,23 +72,57 @@ st.markdown("""
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Centro Comando">
-    <link rel="manifest" href="https://centro-comando-parawa.streamlit.app/assets/manifest.json">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%2300ACC1' width='192' height='192'/><text x='96' y='110' font-size='90' fill='white' text-anchor='middle' font-weight='bold'>CC</text></svg>">
+    <link rel="manifest" href="assets/manifest.json">
 
     <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('assets/sw.js')
-                .then(r => console.log('✅ SW registrado'))
-                .catch(e => console.log('⚠️ SW error:', e));
-        }
-
-        // Detectar si es PWA
+        let deferredPrompt;
         window.isPWA = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
-        console.log('🔍 ¿Es PWA?', window.isPWA);
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            console.log('✅ PWA instalable detectada');
+            window.showInstallButton = true;
+        });
+
+        window.installApp = function() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('✅ App instalada');
+                    }
+                    deferredPrompt = null;
+                });
+            }
+        };
+
+        if (window.isPWA) {
+            console.log('🎉 App ejecutándose como PWA instalada');
+        }
     </script>
 """, unsafe_allow_html=True)
 
-# Mostrar botón hamburguesa SOLO si es PWA
+# Inicializar session state
+if 'show_install_button' not in st.session_state:
+    st.session_state.show_install_button = False
+
+# Crear botón de instalación si está disponible
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    if st.button("📥 Instalar App en tu celular", key="install_btn", use_container_width=True):
+        st.markdown("""
+            <script>
+                if (window.showInstallButton) {
+                    window.installApp();
+                } else {
+                    alert('Tu navegador no soporta instalación PWA.\\n\\nIntenta con Chrome o Edge.');
+                }
+            </script>
+        """, unsafe_allow_html=True)
+        st.info("📥 Si ves un prompt de instalación, ¡clickea 'Instalar'!")
+
+# Mostrar botón hamburguesa SOLO si está instalada como PWA
 if st.session_state.get('isPWA', False):
     st.markdown("""
         <style>
@@ -107,10 +141,7 @@ if st.session_state.get('isPWA', False):
             font-weight: 900;
             box-shadow: 0 4px 12px rgba(0, 172, 193, 0.4);
         }
-        .hamburger-btn:hover {
-            background: #00838F;
-            transform: scale(1.05);
-        }
+        .hamburger-btn:hover { background: #00838F; }
         [data-testid="stSidebarCollapseButton"] { display: none !important; }
         </style>
         <button class="hamburger-btn" onclick="document.querySelector('[data-testid=stSidebar]').scrollIntoView({behavior: 'smooth'});">≡</button>
