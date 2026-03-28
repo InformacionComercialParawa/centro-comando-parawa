@@ -63,31 +63,6 @@ st.set_page_config(
 )
 
 # ============================================================================
-# PWA - PROGRESSIVE WEB APP
-# ============================================================================
-
-st.markdown("""
-    <!-- Meta tags para PWA -->
-    <meta name="theme-color" content="#00ACC1">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Centro Comando">
-    <link rel="manifest" href="assets/manifest.json">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%2300ACC1' width='192' height='192'/><text x='50%' y='50%' font-size='80' fill='white' text-anchor='middle' dominant-baseline='middle' font-weight='bold'>CC</text></svg>">
-
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('assets/sw.js').then(function(registration) {
-                console.log('✅ Service Worker registrado:', registration);
-            }).catch(function(error) {
-                console.log('⚠️ Error registrando Service Worker:', error);
-            });
-        }
-    </script>
-""", unsafe_allow_html=True)
-
-# ============================================================================
 # BOTÓN HAMBURGUESA FUNCIONAL PARA MOBILE + DESKTOP
 # ============================================================================
 
