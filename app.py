@@ -63,7 +63,7 @@ st.set_page_config(
 )
 
 # ============================================================================
-# PWA - PROGRESSIVE WEB APP CON BOTÓN MANUAL DE INSTALACIÓN
+# PWA - PROGRESSIVE WEB APP CON INSTRUCCIONES
 # ============================================================================
 
 st.markdown("""
@@ -75,52 +75,27 @@ st.markdown("""
     <link rel="manifest" href="assets/manifest.json">
 
     <script>
-        let deferredPrompt;
         window.isPWA = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            console.log('✅ PWA instalable detectada');
-            window.showInstallButton = true;
-        });
-
-        window.installApp = function() {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    if (choiceResult.outcome === 'accepted') {
-                        console.log('✅ App instalada');
-                    }
-                    deferredPrompt = null;
-                });
-            }
-        };
-
-        if (window.isPWA) {
-            console.log('🎉 App ejecutándose como PWA instalada');
-        }
     </script>
 """, unsafe_allow_html=True)
 
-# Inicializar session state
-if 'show_install_button' not in st.session_state:
-    st.session_state.show_install_button = False
-
-# Crear botón de instalación si está disponible
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    if st.button("📥 Instalar App en tu celular", key="install_btn", use_container_width=True):
-        st.markdown("""
-            <script>
-                if (window.showInstallButton) {
-                    window.installApp();
-                } else {
-                    alert('Tu navegador no soporta instalación PWA.\\n\\nIntenta con Chrome o Edge.');
-                }
-            </script>
-        """, unsafe_allow_html=True)
-        st.info("📥 Si ves un prompt de instalación, ¡clickea 'Instalar'!")
+# Mostrar instrucciones de instalación en celular
+st.markdown("""
+    <div style='background: linear-gradient(135deg, #E0F7FA 0%, #B2EBF2 100%); padding: 20px; border-radius: 12px; border-left: 4px solid #00ACC1; margin-bottom: 20px;'>
+        <h3 style='color: #00695C; margin-top: 0;'>📱 Instalar como App</h3>
+        <p style='color: #004D40; margin: 10px 0;'><b>En Chrome/Edge (Android):</b></p>
+        <ul style='color: #004D40;'>
+            <li>Menú ⋮ (arriba derecha)</li>
+            <li>"Instalar aplicación" o "Descargar"</li>
+        </ul>
+        <p style='color: #004D40; margin: 10px 0;'><b>En Safari (iPhone):</b></p>
+        <ul style='color: #004D40;'>
+            <li>Botón compartir (abajo)</li>
+            <li>"Agregar a pantalla de inicio"</li>
+        </ul>
+        <p style='color: #004D40; margin: 10px 0; font-size: 12px;'>💡 La app se abrirá sin navegador, como una app nativa.</p>
+    </div>
+""", unsafe_allow_html=True)
 
 # Mostrar botón hamburguesa SOLO si está instalada como PWA
 if st.session_state.get('isPWA', False):
